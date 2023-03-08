@@ -6,6 +6,7 @@
 #include<sys/epoll.h>
 #include<sys/stat.h>
 #include<sys/sendfile.h>
+
 #include<fcntl.h>
 #include<memory.h>
 #include<strings.h>   
@@ -16,6 +17,8 @@
 #include<unistd.h>
 // #include<memory.h>
 #include<malloc.h>   // free
+#include<pthread.h>  
+#include<ctype.h>   // isxdigit
 
 
 int initListenFD(unsigned short port){
@@ -38,8 +41,8 @@ int initListenFD(unsigned short port){
     memset(&addr, 0, sizeof(addr));       //每个字节都用0填充
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    // addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_addr.s_addr = inet_addr("172.25.146.96");
+    addr.sin_addr.s_addr = INADDR_ANY;
+    // addr.sin_addr.s_addr = inet_addr("172.25.146.96");
 
     ret = bind(lfd,(struct sockaddr*)&addr,sizeof(addr));
     if(ret==-1){
@@ -55,6 +58,15 @@ int initListenFD(unsigned short port){
     }
     return lfd;
 }
+
+struct FDInfo
+{
+    pthread_t tid;
+    int fd;
+    int epfd;
+
+};
+
 
 int epollRun(int lfd)
 {   
@@ -78,26 +90,33 @@ int epollRun(int lfd)
     while(1){
         int num = epoll_wait(epfd,evs,size,-1);
         for(int i=0;i<num;++i){
+
             int fd = evs[i].data.fd;
+            struct FDInfo* info = (struct FDInfo*)malloc(sizeof(struct FDInfo));
+            info->epfd = epfd;
+            info->fd = fd;
+            
             if(fd == lfd){
                 //建立新连接
-                acceptClient(lfd,epfd);
+                // acceptClient(lfd,epfd);
+                pthread_create(&info->tid,NULL,acceptClient,info);
             }else{
                 // 读数据
-                recvHttpRequest(fd,epfd);
+                pthread_create(&info->tid,NULL,recvHttpRequest,info);
             }
         }
     }
     return 0;
 }
 
-int acceptClient(int lfd, int epfd)
+void* acceptClient(void* arg)
 {
-    printf("建立新连接...\n");
-    int cfd = accept(lfd,NULL,NULL);
+    struct FDInfo* info = (struct FDInfo*)arg;
+    printf("建立连接线程：%ld\n",pthread_self());
+    int cfd = accept(info->fd,NULL,NULL);
     if(cfd==-1){
         perror("accept error");
-        return -1;
+        return NULL;
     }
     // 设置边沿非阻塞
     int flag = fcntl(cfd,F_GETFL);
@@ -108,26 +127,28 @@ int acceptClient(int lfd, int epfd)
     struct epoll_event ev;
     ev.data.fd = cfd;
     ev.events=EPOLLIN | EPOLLET;
-    int ret = epoll_ctl(epfd,EPOLL_CTL_ADD,cfd,&ev);
+    int ret = epoll_ctl(info->epfd,EPOLL_CTL_ADD,cfd,&ev);
 
     if(ret==-1){
         perror("epoll_ctl add error..");
-        return -1;
+        return NULL;
     }
+    free(info);
 
-    return 0;
+    return NULL;
 }
 
-int recvHttpRequest(int cfd, int epfd)
+void* recvHttpRequest(void* arg)
 {   
-    printf("开始接受客户端数据...\n");
+    struct FDInfo* info = (struct FDInfo*)arg;
+
+    printf("接收数据线程：%ld\n",pthread_self());
     int len = 0,total=0;
     char tmp[4096] = {0};
     char buff[4096] = {0};
     int size  = 4096;
-    while((len =  recv(cfd,tmp,size,0)) > 0){
+    while((len =  recv(info->fd,tmp,size,0)) > 0){
         printf("len: %i\n",len);
-  
             if(total+len<sizeof(buff)){
                 memcpy(buff+total,tmp,len);
             }
@@ -139,18 +160,17 @@ int recvHttpRequest(int cfd, int epfd)
         char* pt = strstr(buff,"\r\n");
         int reqlen = pt-buff;
         buff[reqlen] = '\0';
-        parseRequestLine(buff,cfd);
-
+        parseRequestLine(buff,info->fd);
     }
     else if(len==0){
-
-        epoll_ctl(epfd,EPOLL_CTL_DEL,cfd,NULL);
-        close(cfd);
+        epoll_ctl(info->epfd,EPOLL_CTL_DEL,info->fd,NULL);
+        close(info->fd);
     }
     else{
         perror("recv error...");
     }
-    
+    free(info);
+
     return 0;
 }
 
@@ -164,6 +184,7 @@ int parseRequestLine(const char *line, int cfd)
     if(strcasecmp(method,"GET")!=0){
         return -1;
     } else{
+        decodeMsg(path,path);   
         char * file = NULL;
         // 相对路径
         if(strcmp(path,"/")==0){
@@ -219,13 +240,22 @@ int sendFile(const char *filename, int cfd)
         }
     }
 #else
-    int size = lseek(fd,0,SEEK_END);
-    int ret = sendfile(cfd,fd,NULL,size);
-    if(ret==-1){
-        perror("send file");
+    off_t offset = 0;
+    int size = lseek(fd, 0, SEEK_END);
+    lseek(fd, 0, SEEK_SET);
+    while (offset < size)
+    {
+        int ret = sendfile(cfd, fd, &offset, size - offset);   // 会自动修改offset的值
+        // printf("ret value: %d\n", ret);
+        // if (ret == -1 && errno == EAGAIN)
+        // {
+        //     // printf("没数据...\n");
+        // }
     }
 #endif
+    close(fd);
     return 0;
+
 }
 
 int sendHeaderMsg(int cfd, int status, const char *desc, const char *content_type, int length)
@@ -233,7 +263,7 @@ int sendHeaderMsg(int cfd, int status, const char *desc, const char *content_typ
     char buff[4096];
     sprintf(buff,"http/1.1 %d %s\r\n",status,desc);
     sprintf(buff+strlen(buff),"content-type: %s\r\n",content_type);
-    sprintf(buff+strlen(buff),"content-length: %i\r\n",length);
+    sprintf(buff+strlen(buff),"content-length: %d\r\n\r\n",length);
     send(cfd,buff,strlen(buff),0);
 
     return 0;
@@ -246,7 +276,7 @@ const char* getFileType(const char *name)
         return "text/plain; charset=utf-8";
     }
     if(strcmp(name,".html")==0 || strcmp(name,".htm")==0){
-        return "text/html: charset=utf-8";
+        return "text/html; charset=utf-8";
     }
     if(strcmp(name,".jpg")==0 || strcmp(name,".jpeg")==0){
         return "image/jpeg";
@@ -283,7 +313,7 @@ int sendDir(const char *dirName, int cfd)
 {
     struct dirent** namelist;
     char buff[4096];
-    sprintf(buff,"<html><head><title>%s</title></head><body><table>",dirName);
+    sprintf(buff,"<html><head><title>DIR: %s</title></head><body><table>",dirName);
     int num = scandir(dirName,&namelist,NULL,alphasort);
     printf("文件夹%s内文件数：%i\n",dirName, num);
     for(int i=0;i<num;i++){
@@ -295,9 +325,9 @@ int sendDir(const char *dirName, int cfd)
 
         stat(subpath,&st);
         if(S_ISDIR(st.st_mode)){
-            sprintf(buff+strlen(buff), "<tr><td><a href=\"%s/\">%s</a></td><td>%ld</td></tr>>", name,name,st.st_size);
+            sprintf(buff+strlen(buff), "<tr><td><a href=\"%s/\">%s</a></td><td>%ld</td></tr>", name,name,st.st_size);
         }else{
-            sprintf(buff+strlen(buff), "<tr><td><a href=\"%s\">%s</a></td><td>%ld</td></tr>>", name,name,st.st_size);
+            sprintf(buff+strlen(buff), "<tr><td><a href=\"%s\">%s</a></td><td>%ld</td></tr>", name,name,st.st_size);
         }
         
         send(cfd,buff,strlen(buff),0);
@@ -308,4 +338,33 @@ int sendDir(const char *dirName, int cfd)
     send(cfd,buff,strlen(buff),0);
     free(namelist);
     return 0;
+}
+
+//
+int hexToDec(char c){
+    if(c >='0' && c <= '9')
+        return c- '0';
+    if(c >='a' && c<='f')
+        return c-'a' + 10;
+    if(c >='A' && c <= 'F')
+        return c- 'A' + 10;
+    return 0;
+}
+
+void decodeMsg(char* to, char* from){
+    for(;*from != '\0';++to,++from){
+        // isxdigit -> 判断字符是不是16进制格式, 取值在 0-f
+        // Linux%E5%86%85%E6%A0%B8.jpg
+        if(from[0]=='%' && isxdigit(from[1]) && isxdigit(from[2])){
+            // 将16进制的数 -> 十进制 将这个数值赋值给了字符 int -> char
+            // B2 == 178
+            // 将3个字符, 变成了一个字符, 这个字符就是原始数据
+            *to = hexToDec(from[1])*16 + hexToDec(from[2]);
+            from += 2;
+        } 
+        else{
+            *to = *from;
+        }
+    }
+    *to = '\0';
 }
