@@ -1,0 +1,74 @@
+@startuml
+title
+C++
+end title
+
+class Channel{
+    - m_fd:int
+    - m_events:int
+    - args: void
+}
+
+interface Dispatcher{
+    + add():int
+    + remove():int
+    + modify():int
+    + dispatch():int
+    + setChannel():void
+    # m_name:string
+    # m_channel:Channel
+    # m_evLoop:EventLoop
+}
+
+
+EpollDispatch -.|> Dispatcher
+PollDispatch -.|> Dispatcher
+SelectDispatch -.|> Dispatcher
+
+class EventLoop{
+    - m_isQuit : bool 
+    - m_dispatcher : Dispatcher
+    - m_taskQ : queue_ChannelElement
+    - m_channelMap : map_int_Channel
+    - m_threadID: thread_id
+    - m_threadName:string 
+    - m_mutex :mutex 
+    - m_socketPair: int_2
+}
+
+EventLoop --.> Channel
+EventLoop --.> Dispatcher 
+
+class ThreadPool{
+    - m_mainLoop ：EventLoop
+    - m_isStart ：bool 
+    - m_threadNum ：int 
+    - m_workerThreads：vector_WorkerThread
+    - m_index : int 
+}
+
+class TcpServer{
+    int threadNum;
+    // 主反应堆模型
+    struct EventLoop* mainLoop;
+    // 线程池
+    struct ThreadPool* threadPool;
+    // 监听文件描述符
+    struct Listener* listener;
+}
+
+class TcpServer{
+    - m_threadNum : int 
+    - m_mainLoop :EventLoop
+    - m_threadPool :ThreadPool
+    - m_lfd :int 
+    - m_port : unsigned_short
+}
+
+TcpServer --.> ThreadPool
+TcpServer --.> EventLoop
+
+' main.c --> hh
+
+
+@enduml
