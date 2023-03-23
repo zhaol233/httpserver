@@ -39,11 +39,13 @@ struct Listener* listenerInit(unsigned short port)
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = INADDR_ANY;
     ret = bind(lfd, (struct sockaddr*)&addr, sizeof addr);
+    
     if (ret == -1)
     {
         perror("bind");
         return NULL;
     }
+
     // 4. 设置监听
     ret = listen(lfd, 128);
     if (ret == -1)
@@ -51,6 +53,7 @@ struct Listener* listenerInit(unsigned short port)
         perror("listen");
         return NULL;
     }
+    
     // 返回fd
     listener->lfd = lfd;
     listener->port = port;

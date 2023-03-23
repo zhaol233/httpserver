@@ -1,5 +1,7 @@
 /bazel-*
 /.vscode
+/html
+/latex
 
 
 # Prerequisites

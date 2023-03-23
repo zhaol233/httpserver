@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
     chdir(argv[2]);
 #else
     unsigned short port = 10000;  
-    chdir("/home/robin/luffy");  
+    chdir("/home/zl/test");  
 #endif
     // 启动服务器
     struct TcpServer* server = tcpServerInit(port, 4);
