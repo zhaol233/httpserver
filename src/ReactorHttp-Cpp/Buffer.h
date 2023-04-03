@@ -24,7 +24,10 @@ public:
     int appendString(const char* data, int size);
     int appendString(const char* data);
     int appendString(const string data);
+    
+    // 读取数据
     int socketRead(int fd);
+
     // 根据\r\n取出一行, 找到其在数据块中的位置, 返回该位置
     char* findCRLF();
     // 发送数据

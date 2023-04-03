@@ -7,6 +7,7 @@ class Channel{
     - m_fd:int
     - m_events:int
     - args: void
+    + init(fd, events, readFunc, writeFunc, destroyFunc, void* arg)
 }
 
 interface Dispatcher{
@@ -33,40 +34,125 @@ class EventLoop{
     - m_threadID: thread_id
     - m_threadName:string 
     - m_mutex :mutex 
-    - m_socketPair: int_2
+    - m_socketPair: 1用于检测读时间
 }
 
-EventLoop --.> Channel
-EventLoop --.> Dispatcher 
+' EventLoop --.> Channel : 包含channelmap
+EventLoop --> Dispatcher : <color:green>2.1 run, 返回fd
+EventLoop --> channelmap:  <color:green>2.2找到对应的channel
+channelmap --> Channel
+EventLoop --> eventActive :  <color:green>2.3运行callback函数
 
 class ThreadPool{
-    - m_mainLoop ：EventLoop
-    - m_isStart ：bool 
-    - m_threadNum ：int 
-    - m_workerThreads：vector_WorkerThread
+    - m_mainLoop
+    - m_isStart 
+    - m_threadNum
+    - m_workerThreads
     - m_index : int 
+} 
+
+' main_loop --.>EventLoop
+' sub_loop --.> EventLoop
+
+class WorkerThread
+{
+    - m_thread
+    - m_threadID
+    - m_name
+    - m_mutex :  mutex
+    - m_cond : condition_variable 
+    - m_evLoop
+
+    + init(int index)
+    + run()
 }
+
 
 class TcpServer{
-    int threadNum;
-    // 主反应堆模型
-    struct EventLoop* mainLoop;
-    // 线程池
-    struct ThreadPool* threadPool;
-    // 监听文件描述符
-    struct Listener* listener;
+    - m_threadNum
+    - m_mainLoop
+    - m_threadPool
+    - m_lfd 
+    - m_port 
+    + run() : 开关，运行主反应堆模型
 }
 
-class TcpServer{
-    - m_threadNum : int 
-    - m_mainLoop :EventLoop
-    - m_threadPool :ThreadPool
-    - m_lfd :int 
-    - m_port : unsigned_short
+class TcpConnection
+{
+    - m_evLoop
+    - m_channel
+    - m_readBuf
+    - m_writeBuf
+    - m_request
+    - m_response
+
+    + init(cfd,*EventLoop)
 }
 
-TcpServer --.> ThreadPool
-TcpServer --.> EventLoop
+class Buffer{
+    - m_data : char
+    - m_capacity
+    - m_readPos
+    - m_writePos
+}
+class HttpRequest {
+    - m_method
+    - m_url
+    - m_version
+    - m_reqHeaders
+    - m_curState: PrecessState 
+}
+
+class HttpResponse
+{
+    - m_statusCode : StatusCode 
+    - m_fileName
+    - m_headers 
+    - m_info 
+}
+
+enum StatusCode
+{
+    Unknown,
+    OK = 200,
+    MovedPermanently = 301,
+    MovedTemporarily = 302,
+    BadRequest = 400,
+    NotFound = 404
+}
+
+enum PrecessState
+{
+    ParseReqLine
+    ParseReqHeaders
+    ParseReqBody
+    ParseReqDone
+} 
+
+HttpRequest --.> PrecessState
+HttpResponse --.> StatusCode
+
+TcpServer --> ThreadPool : <color:green>1.运行线程池及反应堆模型 </color>
+
+ThreadPool --.> WorkerThread : 封装工作线程
+WorkerThread --.> sub_loop : 每个子线程拥有一个反应堆模型
+TcpServer --.> listenfd : 监听描述符
+
+main_loop --> acceptConnection : 主进程监听描述符的回调函数 
+listenfd --> main_loop : addTask
+
+acceptConnection --.> TcpConnection : 监听到fd,建立新的连接
+
+TcpConnection --.> sub_loop  : 有新连接就会调用addTask
+
+TcpConnection --.> processRead : channel的读函数
+processRead --.> HttpRequest
+TcpConnection --.> processWrite : channel的写函数
+processWrite --.> HttpResponse
+
+TcpConnection  --.> Buffer  : read_buf和write_buf
+' TcpConnection  --.> Channel : 当前连接对应的channel
+
 
 ' main.c --> hh
 

@@ -17,6 +17,7 @@ SelectDispatcher::~SelectDispatcher()
 
 int SelectDispatcher::add()
 {
+    // 如果fd超过select的容量，失败
     if (m_channel->getSocket() >= m_maxSize)
     {
         return -1;

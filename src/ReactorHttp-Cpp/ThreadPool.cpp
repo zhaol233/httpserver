@@ -41,16 +41,19 @@ void ThreadPool::run()
 EventLoop* ThreadPool::takeWorkerEventLoop()
 {
     assert(m_isStart);
+
+    // 只能由主线程调用
     if (m_mainLoop->getThreadID() != this_thread::get_id())
     {
         exit(0);
     }
+
     // 从线程池中找一个子线程, 然后取出里边的反应堆实例
     EventLoop* evLoop = m_mainLoop;
     if (m_threadNum > 0)
     {
         evLoop = m_workerThreads[m_index]->getEventLoop();
-        m_index = ++m_index % m_threadNum;
+        m_index = ++m_index % m_threadNum;  // 线程index++，轮流执行任务，防止空闲
     }
     return evLoop;
 }

@@ -33,7 +33,7 @@ EventLoop::EventLoop(const string threadName)
         readLocalMessage, nullptr, nullptr, this);
 #else
     // 绑定 - bind
-    auto obj = bind(&EventLoop::readMessage, this);
+    auto obj = bind(&EventLoop::readMessage, this);   // obj是一个函数，使用了绑定器
     Channel* channel = new Channel(m_socketPair[1], FDEvent::ReadEvent,
         obj, nullptr, nullptr, this);
 #endif
@@ -56,8 +56,8 @@ int EventLoop::run()
     // 循环进行事件处理
     while (!m_isQuit)
     {
-        m_dispatcher->dispatch();    // 超时时长 2s
-        processTaskQ();
+        m_dispatcher->dispatch();    // 超时时长 2s，
+        processTaskQ();              // 检测之后检查有没有新的连接
     }
     return 0;
 }

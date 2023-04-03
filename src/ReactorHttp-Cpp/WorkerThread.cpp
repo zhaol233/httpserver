@@ -31,8 +31,9 @@ void WorkerThread::run()
 {
     // 创建子线程
     m_thread = new thread(&WorkerThread::running, this);
+    
     // 阻塞主线程, 让当前函数不会直接结束
-    unique_lock<mutex> locker(m_mutex);
+    unique_lock<mutex> locker(m_mutex);  // 初始化Locker,用m_mutex,会一直锁住m_mutex
     while (m_evLoop == nullptr)
     {
         m_cond.wait(locker);

@@ -27,13 +27,17 @@ public:
     int run();
     // 处理别激活的文件fd
     int eventActive(int fd, int event);
-    // 添加任务到任务队列
+
+    // 添加任务到m_TaskQ
     int addTask(struct Channel* channel, ElemType type);
     // 处理任务队列中的任务
     int processTaskQ();
-    // 处理dispatcher中的节点
+
+    // 添加任务到dispatcher的检测集合
     int add(Channel* channel);
+     // 从dispatcher的检测集合中删除任务
     int remove(Channel* channel);
+     // 在dispatcher的检测集合中修改任务
     int modify(Channel* channel);
     // 释放channel
     int freeChannel(Channel* channel);
