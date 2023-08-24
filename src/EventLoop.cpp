@@ -24,7 +24,7 @@ EventLoop::EventLoop(const string threadName)
     int ret = socketpair(AF_UNIX, SOCK_STREAM, 0, m_socketPair);
     if (ret == -1)
     {
-        perror("socketpair");
+        perror("eventloop socketpair failed ");
         exit(0);
     }
 #if 0
@@ -95,14 +95,14 @@ int EventLoop::addTask(Channel* channel, ElemType type)
     // 处理节点
     /*
     * 细节:
-    *   1. 对于链表节点的添加: 可能是当前线程也可能是其他线程(主线程)
+    *   1. 对于链表节点的添加: 可能是当前线程也可能是其他线程(例如主线程)
     *       1). 修改fd的事件, 当前子线程发起, 当前子线程处理
     *       2). 添加新的fd, 添加任务节点的操作是由主线程发起的
     *   2. 不能让主线程处理任务队列, 需要由当前的子线程取处理
     */
     if (m_threadID == this_thread::get_id())
     {
-        // 当前子线程(基于子线程的角度分析)
+        // 当前线程
         processTaskQ();
     }
     else

@@ -1,0 +1,159 @@
+@startuml
+title
+C++
+end title
+
+class Channel{
+    - m_fd:int
+    - m_events:int
+    - args: void
+    + handlerFunc
+}
+
+interface Dispatcher{
+    + add():int
+    + remove():int
+    + modify():int
+    + dispatch():int
+    + setChannel():void
+    # m_name:string
+    # m_channel:Channel
+    # m_evLoop:EventLoop
+}
+
+EpollDispatch --|> Dispatcher
+PollDispatch --|> Dispatcher
+SelectDispatch --|> Dispatcher
+
+class EventLoop{
+    - m_socketPair
+    + addTask()
+    - taskWakeup()
+    + readMessage()
+}
+
+
+
+struct channelmap {
+    - name
+    - channel
+}
+
+
+
+
+class ThreadPool{
+    - m_threadNum
+} 
+
+' sub_loop --.> EventLoop
+
+class WorkerThread
+{
+    - m_thread
+}
+
+
+class TcpServer{
+    - m_threadNum
+    - m_lfd 
+    - m_port 
+    + run() : start
+}
+
+
+
+class TcpConnection
+{
+    - m_evLoop
+    - m_channel
+    - m_readBuf
+    - m_writeBuf
+    - m_request
+    - m_response
+
+    + init(cfd,*EventLoop)
+}
+
+class Buffer{
+    - m_data : char
+    - m_capacity
+    - m_readPos
+    - m_writePos
+}
+class HttpRequest {
+    - m_method
+    - m_url
+    - m_version
+    - m_reqHeaders
+    - m_curState: PrecessState 
+}
+
+class HttpResponse
+{
+    - m_statusCode : StatusCode 
+    - m_fileName
+    - m_headers 
+    - m_info 
+}
+
+enum StatusCode
+{
+    Unknown,
+    OK = 200,
+    MovedPermanently = 301,
+    MovedTemporarily = 302,
+    BadRequest = 400,
+    NotFound = 404
+}
+
+enum PrecessState
+{
+    ParseReqLine
+    ParseReqHeaders
+    ParseReqBody
+    ParseReqDone
+} 
+
+' HttpRequest --.> PrecessState
+' HttpResponse --.> StatusCode
+
+' EventLoop --.> Channel : 包含channelmap
+EventLoop --> TaskQueue : queue<ChannelElement*>
+EventLoop -left> Dispatcher : has_a
+EventLoop --> channelmap: has_a
+channelmap --> Channel : key-value
+channelmap -right.|> TaskQueue : depend
+
+Dispatcher <-- Channel: FD_SET
+
+TcpServer --> EventLoop : has_a
+TcpServer --> ThreadPool : <color:green> has_a </color>
+
+
+ThreadPool -left> EventLoop : <color:green> has_a </color>
+
+ThreadPool --.> WorkerThread : has_a 
+EventLoop <-- WorkerThread : has_a
+
+TcpServer -right> listenfd :  has_a, add to mainloop
+
+listenfd --> TcpConnection :  callback acceptConnection
+
+TcpConnection -right> Buffer
+TcpConnection -right> HttpRequest
+TcpConnection -right> HttpResponse
+
+' TcpConnection --.> processRead : channel的读函数
+' processRead --.> HttpRequest
+' TcpConnection --.> processWrite : channel的写函数
+' processWrite --.> HttpResponse
+
+' TcpConnection  --.> Buffer  : read_buf和write_buf
+' TcpConnection  --.> Channel : 当前连接对应的channel
+
+
+' main.c --> hh
+
+
+@enduml 

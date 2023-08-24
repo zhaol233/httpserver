@@ -33,7 +33,7 @@ void TcpServer::setListen()
     m_lfd = socket(AF_INET, SOCK_STREAM, 0);
     if (m_lfd == -1)
     {
-        perror("socket");
+        perror("main listen fd create error");
         return;
     }
     // 2. 设置端口复用
@@ -41,7 +41,7 @@ void TcpServer::setListen()
     int ret = setsockopt(m_lfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt);
     if (ret == -1)
     {
-        perror("setsockopt");
+        perror("main listen fd setsockopt error");
         return;
     }
     // 3. 绑定
@@ -52,14 +52,14 @@ void TcpServer::setListen()
     ret = bind(m_lfd, (struct sockaddr*)&addr, sizeof addr);
     if (ret == -1)
     {
-        perror("bind");
+        perror("main listen fd bind addr error");
         return ;
     }
     // 4. 设置监听
     ret = listen(m_lfd, 128);
     if (ret == -1)
     {
-        perror("listen");
+        perror("main listen fd start listen error");
         return ;
     }
 }
