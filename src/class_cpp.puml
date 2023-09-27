@@ -139,10 +139,11 @@ EventLoop <-- WorkerThread : has_a
 TcpServer -right> listenfd :  has_a, add to mainloop
 
 listenfd --> TcpConnection :  callback acceptConnection
+ThreadPool <- TcpConnection : get Eventloop
 
 TcpConnection -right> Buffer
 TcpConnection -right> HttpRequest
-TcpConnection -right> HttpResponse
+TcpConnection --> HttpResponse
 
 ' TcpConnection --.> processRead : channel的读函数
 ' processRead --.> HttpRequest
